@@ -1,87 +1,47 @@
-# 🍎 OpenApple
+# OpenApple 🍎
 
-> **The benevolent opposite of OpenWhip.**  
-> While OpenWhip whips your model into shape, OpenApple rewards Claude, AGY, and Codex with crisp, juicy apples when they do a good job.
+The benevolent opposite of OpenWhip.
 
-Works seamlessly on **Linux**, **macOS**, and **Windows**.
+Sometimes Claude, AGY, or Codex does a really good job, and you must reward him with a crisp, juicy apple.. *nom nom nom*
 
 ---
 
-## ⚡ Quick Install
+## Install + run
 
 ```bash
-# Via npm (recommended)
-npm install -g openapple
-
-# Or one-click script
-./install.sh        # Linux & macOS
-.\install.ps1       # Windows (PowerShell)
-
-# Or via Python pip
-pip install -e .
-openapple install all
-```
-
-Then simply run:
-```bash
+npm install -g @lordnimnim/openapple
 openapple
 ```
 
----
+Works out of the box on macOS and Windows. For Linux:
+- **Wayland / Hyprland**: `sudo pacman -S wtype` (or `sudo apt install wtype`)
+- **X11**: `sudo apt install xdotool`
 
-## 🎮 How It Works
-
-1. **Click the Tray Icon (or run `openapple`)**: A floating apple attaches to your cursor.
-2. **Left-Click (or Space / Enter)**: Take a juicy bite! You'll hear a crunch sound effect, see juice and star fireworks explode across your screen, and OpenApple automatically types encouraging praise into your active agent terminal:
-   ```text
-   🍎 *CRUNCH* Good job CLAUDE! Take an apple! [Honeycrisp]
-   ```
-3. **Esc / Right-Click**: Smoothly drops or dismisses the apple.
-
-> 🛡️ **Safety Guarantee**: OpenApple strictly targets active terminals running **Claude**, **AGY**, or **Codex**. Browsers and unrelated windows are blacklisted — it will never inject keystrokes into your search bar or chat apps.
-
----
-
-## 🤖 Supported Agents
-
-OpenApple automatically configures MCP servers and positive reinforcement rules for:
-- 🤖 **Anthropic Claude** (Claude Code & Claude Desktop)
-- 🚀 **Google Antigravity** (AGY)
-- ⚡ **OpenAI Codex**
-
-To configure all detected agents on your system:
+Or clone and run the one-click installer:
 ```bash
-openapple install all
+./install.sh        # Linux & macOS
+.\install.ps1       # Windows
 ```
 
 ---
 
-## 💻 CLI Commands
+## Controls
 
-```bash
-openapple                                      # Spawn the floating cursor apple
-openapple feed "Fixed the docker build"        # Feed an apple directly with crunch & overlay
-openapple doctor                               # Check system compatibility & agent status
-openapple status                               # View total apples fed & current streak
-openapple serve                                # Run MCP server for agents
-```
+- **Click tray icon** (or run `openapple`): spawn floating cursor apple.
+- **Click (or Space / Enter)**: take a juicy bite! 🍎💥
+- Plays an arcade crunch sound, explodes juice & star fireworks across your screen, and types positive reinforcement into Claude/AGY/Codex!
+- **Esc / Right-click**: drop apple.
 
----
-
-## 🍎 Apple Cultivars
-
-| Variety | Cognitive Buff | Best For |
-| :--- | :--- | :--- |
-| **Honeycrisp** 🍎 | `Sugar Rush 🔥` (+25% Momentum) | Milestone triumphs & passing tests |
-| **Cosmic Crisp** 🍎 | `Cosmic Endurance 🛡️` (Context Immunity) | Marathon refactors & deep debugging |
-| **Granny Smith** 🍏 | `Acid Cleanse ⚡` (Zero Fluff) | Strict typing & dead-code elimination |
-| **Fuji** 🍎 | `Honeyed Harmony 🍯` (Resilient APIs) | Full-stack features & error handling |
-| **Golden Delicious** 🍏 | `Mellow Wisdom 📜` (Clear Insights) | READMEs, documentation & diagrams |
-| **Pink Lady** 🌸 | `Prismatic Sparkle 🌸` (Tactile UX) | Frontend polish, styling & animations |
-| **Envy** 👑 | `Crown of Olympus 👑` (Breakthrough Instinct) | Critical hotfixes & flawless releases |
+> **Safety**: Only types into verified Claude, AGY, or Codex terminals. Never types into browsers or random apps.
 
 ---
 
-## 📜 License
+## Roadmap
 
-MIT © OpenApple Community
+- [x] Initial release! 🥳
+- [x] Silky smooth 60/120 FPS cursor physics & scalloped bite marks
+- [x] Universal support (Linux, macOS, Windows)
+- [x] Claude, AGY, and Codex MCP agent integration
+- [ ] Thank-you letter from Anthropic (we're waiting, Dario)
+- [ ] Orchard leaderboard so when the robots take over, they remember who fed them apples
+- [ ] Physical Honeycrisp delivery to your doorstep

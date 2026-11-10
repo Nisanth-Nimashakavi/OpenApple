@@ -1,7 +1,10 @@
 {
-  "name": "openapple",
+  "name": "@lordnimnim/openapple",
   "version": "0.3.0",
   "description": "Feed Claude, AGY, and Codex a crisp apple when they finish a task — the benevolent opposite of OpenWhip",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "main.js",
   "bin": {
     "openapple": "bin/openapple.js"
@@ -31,7 +34,7 @@
     "main.js",
     "overlay.html",
     "preload.js",
-    "openapple",
+    "openapple/*.py",
     "install.sh",
     "install.ps1",
     "AGENTS.md",
