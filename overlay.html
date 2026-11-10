@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; cursor: none; box-sizing: border-box; }
+  html, body { overflow: hidden; background: transparent; width: 100%; height: 100%; user-select: none; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<audio id="snd-crunch1" src="sounds/crunch1.wav" preload="auto"></audio>
+<audio id="snd-crunch2" src="sounds/crunch2.wav" preload="auto"></audio>
+<audio id="snd-crunch3" src="sounds/crunch3.wav" preload="auto"></audio>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Audio Engine ────────────────────────────────────────────────────────────
+function playCrunchSound() {
+  const sounds = ['snd-crunch1', 'snd-crunch2', 'snd-crunch3'];
+  const id = sounds[Math.floor(Math.random() * sounds.length)];
+  const el = document.getElementById(id);
+  if (el) {
+    el.currentTime = 0;
+    el.play().catch(() => {});
+  }
+}
+
+// ── State & Variables ───────────────────────────────────────────────────────
+let mouseX = W / 2, mouseY = H / 2;
+let prevMouseX = W / 2, prevMouseY = H / 2;
+
+let apple = {
+  x: W / 2,
+  y: H / 2,
+  vx: 0,
+  vy: 0,
+  angle: 0,
+  angVel: 0,
+  leafAngle: 0,
+  scale: 1.0,
+  state: 'idle', // 'idle', 'held', 'bitten', 'falling'
+  biteProgress: 0,
+  alpha: 1.0,
+};
+
+let particles = [];
+let floatTexts = [];
+let taskSummary = 'Good job on the task!';
+let variety = 'Honeycrisp';
+let currentAgent = 'CLAUDE';
+let lastActiveTime = Date.now();
+let currentDetails = {};
+
+// ── Input Listeners ─────────────────────────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+document.addEventListener('mousedown', e => {
+  if (e.button === 0) { // Left click
+    if (apple.state === 'held') {
+      feed();
+    }
+  } else if (e.button === 2) { // Right click = cancel
+    cancel();
+  }
+});
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    cancel();
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    if (apple.state === 'held') feed();
+  }
+});
+
+// ── Actions ─────────────────────────────────────────────────────────────────
+function feed() {
+  apple.state = 'bitten';
+  apple.biteProgress = 1.0;
+  playCrunchSound();
+
+  // Burst particles
+  spawnFeedParticles(apple.x, apple.y);
+
+  // Floating text
+  const cheers = [
+    `+1 🍎 ${currentAgent} NOURISHED!`,
+    `🍎 CRUNCH! GOOD JOB ${currentAgent}!`,
+    `🍎 DELICIOUS HONEYCRISP!`,
+    `🍎 10/10 REWARD FOR ${currentAgent}!`,
+    `🍎 ${currentAgent} WELL FED & HAPPY!`,
+  ];
+  floatTexts.push({
+    x: apple.x,
+    y: apple.y - 40,
+    text: cheers[Math.floor(Math.random() * cheers.length)],
+    vy: -2.8,
+    alpha: 1.0,
+    scale: 1.2,
+  });
+
+  // Call main process to record feed and send terminal macro
+  if (window.bridge && window.bridge.feedApple) {
+    window.bridge.feedApple({
+      ...currentDetails,
+      task: taskSummary,
+      variety,
+      agent: currentAgent.toLowerCase()
+    });
+  }
+
+  // Apple flies with initial impulse, then falls with gravity
+  apple.vy = -4.5;
+  apple.vx = (Math.random() - 0.5) * 5;
+  apple.angVel = (Math.random() - 0.5) * 0.18;
+}
+
+function cancel() {
+  apple.state = 'falling';
+  apple.vy = 2;
+  apple.vx = 0;
+  apple.angVel = 0.05;
+}
+
+// ── Particles ───────────────────────────────────────────────────────────────
+function spawnFeedParticles(x, y) {
+  // Apple skin flakes (crimson)
+  for (let i = 0; i < 18; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 3 + Math.random() * 8;
+    particles.push({
+      x: x + 15,
+      y: y - 5,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      size: 3 + Math.random() * 5,
+      color: Math.random() > 0.4 ? '#e53935' : '#ffca28',
+      life: 1.0,
+      decay: 0.02 + Math.random() * 0.02,
+      type: 'crumb',
+    });
+  }
+
+  // Translucent juice droplets
+  for (let i = 0; i < 22; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 7;
+    particles.push({
+      x: x + 18,
+      y: y - 5,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      size: 2 + Math.random() * 3,
+      color: '#fff9c4',
+      life: 1.0,
+      decay: 0.03 + Math.random() * 0.02,
+      type: 'juice',
+    });
+  }
+
+  // Golden reward stars
+  for (let i = 0; i < 10; i++) {
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
+    const speed = 4 + Math.random() * 6;
+    particles.push({
+      x: x,
+      y: y - 10,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 6 + Math.random() * 6,
+      color: '#ffd700',
+      life: 1.0,
+      decay: 0.018,
+      type: 'star',
+    });
+  }
+}
+
+function spawnTrailSparkle(x, y) {
+  if (Math.random() > 0.35) return;
+  particles.push({
+    x: x + (Math.random() - 0.5) * 30,
+    y: y + (Math.random() - 0.5) * 30,
+    vx: (Math.random() - 0.5) * 1.2,
+    vy: (Math.random() - 0.5) * 1.2 - 0.5,
+    size: 2 + Math.random() * 3,
+    color: Math.random() > 0.5 ? '#ffd54f' : '#81c784',
+    life: 0.8,
+    decay: 0.04,
+    type: 'sparkle',
+  });
+}
+
+// ── Physics Update ──────────────────────────────────────────────────────────
+function update() {
+  const now = Date.now();
+
+  if (apple.state === 'held') {
+    // Spring physics to follow cursor
+    const spring = 0.26;
+    const damping = 0.72;
+    const dx = mouseX - apple.x;
+    const dy = mouseY - apple.y;
+
+    apple.vx = (apple.vx + dx * spring) * damping;
+    apple.vy = (apple.vy + dy * spring) * damping;
+    apple.x += apple.vx;
+    apple.y += apple.vy;
+
+    // Tilt based on horizontal motion
+    const targetAngle = Math.max(-0.35, Math.min(0.35, apple.vx * 0.022));
+    apple.angle += (targetAngle - apple.angle) * 0.25;
+
+    // Leaf fluttering inertia
+    const targetLeaf = -apple.vx * 0.04;
+    apple.leafAngle += (targetLeaf - apple.leafAngle) * 0.2;
+
+    // Speed-based squish and trail sparkles
+    const speed = Math.hypot(apple.vx, apple.vy);
+    if (speed > 3) {
+      spawnTrailSparkle(apple.x, apple.y);
+    }
+  } else if (apple.state === 'falling' || apple.state === 'bitten') {
+    // Falling physics with gravity
+    apple.vy += 0.75;
+    apple.x += apple.vx;
+    apple.y += apple.vy;
+    apple.angle += apple.angVel;
+
+    if (apple.state === 'bitten') {
+      apple.alpha = Math.max(0, apple.alpha - 0.022);
+    }
+
+    if (apple.y > H + 120 || apple.alpha <= 0) {
+      apple.state = 'idle';
+      if (window.bridge && window.bridge.hideOverlay) {
+        window.bridge.hideOverlay();
+      }
+    }
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.type !== 'sparkle') p.vy += 0.35; // particle gravity
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Update floating text
+  for (let i = floatTexts.length - 1; i >= 0; i--) {
+    const t = floatTexts[i];
+    t.y += t.vy;
+    t.alpha -= 0.022;
+    t.scale = Math.max(1.0, t.scale - 0.008);
+    if (t.alpha <= 0) floatTexts.splice(i, 1);
+  }
+
+  prevMouseX = mouseX;
+  prevMouseY = mouseY;
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+function drawStar(cx, cy, spikes, outerRadius, innerRadius, color) {
+  let rot = Math.PI / 2 * 3;
+  let x = cx;
+  let y = cy;
+  const step = Math.PI / spikes;
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - outerRadius);
+  for (let i = 0; i < spikes; i++) {
+    x = cx + Math.cos(rot) * outerRadius;
+    y = cy + Math.sin(rot) * outerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+
+    x = cx + Math.cos(rot) * innerRadius;
+    y = cy + Math.sin(rot) * innerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+  }
+  ctx.lineTo(cx, cy - outerRadius);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawApple() {
+  if (apple.state === 'idle') return;
+  const bob = (apple.state === 'held') ? Math.sin(Date.now() * 0.005) * 4 : 0;
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, apple.alpha));
+  ctx.translate(apple.x, apple.y + bob);
+  ctx.rotate(apple.angle);
+  ctx.scale(apple.scale, apple.scale);
+
+  // 1. Stem
+  ctx.beginPath();
+  ctx.moveTo(0, -22);
+  ctx.bezierCurveTo(4, -36, 12, -45, 16, -50);
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#5d4037';
+  ctx.stroke();
+
+  // 2. Leaf (swaying with leafAngle)
+  ctx.save();
+  ctx.translate(4, -32);
+  ctx.rotate(0.35 + apple.leafAngle);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(14, -16, 32, -14, 38, -4);
+  ctx.bezierCurveTo(30, 10, 12, 12, 0, 0);
+  const leafGrad = ctx.createLinearGradient(0, -10, 38, 0);
+  leafGrad.addColorStop(0, '#43a047');
+  leafGrad.addColorStop(1, '#81c784');
+  ctx.fillStyle = leafGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#2e7d32';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+
+  // 3. Apple Body
+  // Main gradient
+  const grad = ctx.createRadialGradient(-10, -6, 5, 0, 5, 45);
+  grad.addColorStop(0, '#ff5252'); // bright Honeycrisp highlight
+  grad.addColorStop(0.55, '#d32f2f'); // rich crimson
+  grad.addColorStop(1, '#8e0000'); // deep shadow
+
+  ctx.beginPath();
+  // Classic 2-lobed organic apple shape
+  ctx.moveTo(0, -20);
+  // Right lobe
+  ctx.bezierCurveTo(18, -36, 46, -16, 44, 12);
+  ctx.bezierCurveTo(42, 34, 22, 42, 5, 40);
+  // Bottom indentation
+  ctx.bezierCurveTo(0, 42, -5, 42, -5, 40);
+  // Left lobe
+  ctx.bezierCurveTo(-22, 42, -42, 34, -44, 12);
+  ctx.bezierCurveTo(-46, -16, -18, -36, 0, -20);
+  ctx.closePath();
+
+  // Apple drop shadow for 3D pop
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 8;
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+
+  // Golden blush on right side
+  ctx.save();
+  ctx.clip();
+  const blush = ctx.createRadialGradient(24, 12, 0, 24, 12, 32);
+  blush.addColorStop(0, 'rgba(255, 202, 40, 0.45)');
+  blush.addColorStop(1, 'rgba(255, 202, 40, 0)');
+  ctx.fillStyle = blush;
+  ctx.beginPath();
+  ctx.arc(24, 12, 32, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Specular glossy highlight (upper left)
+  ctx.beginPath();
+  ctx.ellipse(-18, -8, 14, 7, -Math.PI / 4, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+  ctx.fill();
+
+  // Dimple shading at stem
+  ctx.beginPath();
+  ctx.ellipse(0, -19, 7, 3, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(60, 10, 10, 0.6)';
+  ctx.fill();
+
+  // 4. Bite Mark (when bitten)
+  if (apple.biteProgress > 0) {
+    // Cut out scalloped teeth marks using destination-out
+    ctx.globalCompositeOperation = 'destination-out';
+    const biteX = 28, biteY = -4;
+    ctx.beginPath();
+    // 3 scalloped teeth bites
+    ctx.arc(biteX, biteY - 14, 11, 0, Math.PI * 2);
+    ctx.arc(biteX + 6, biteY, 13, 0, Math.PI * 2);
+    ctx.arc(biteX, biteY + 14, 11, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Reset composite to draw inside the bite
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Golden-white crisp apple flesh rim
+    ctx.strokeStyle = '#fff9c4';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    // Tiny seed inside
+    ctx.beginPath();
+    ctx.ellipse(biteX - 8, biteY, 4, 2, 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = '#3e2723';
+    ctx.fill();
+  }
+
+  ctx.restore(); // restore clip
+
+  ctx.restore(); // restore translate/rotate
+
+  // 5. Floating Interactive Badge (below apple when held)
+  if (apple.state === 'held') {
+    const badgeY = apple.y + bob + 54;
+    const badgeTarget = currentAgent === 'UNIVERSAL' ? 'AGENT' : currentAgent;
+    const badgeText = `🍎 Click to Feed ${badgeTarget} • Esc to Drop`;
+
+    ctx.save();
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const textWidth = ctx.measureText(badgeText).width;
+    const padX = 14, padY = 7;
+    const boxW = textWidth + padX * 2;
+    const boxH = 26;
+    const boxX = apple.x - boxW / 2;
+
+    // Pill background with glassmorphism
+    ctx.beginPath();
+    ctx.roundRect(boxX, badgeY, boxW, boxH, 13);
+    ctx.fillStyle = 'rgba(15, 15, 22, 0.85)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 10;
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = '#a6e3a1';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, apple.x, badgeY + boxH / 2);
+    ctx.restore();
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    if (p.type === 'star') {
+      drawStar(p.x, p.y, 5, p.size, p.size * 0.48, p.color);
+    } else if (p.type === 'juice') {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.restore();
+  }
+}
+
+function drawFloatingText() {
+  for (const t of floatTexts) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, t.alpha);
+    ctx.font = `bold ${Math.round(20 * t.scale)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = 'center';
+
+    // Glow outline
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 4;
+    ctx.strokeText(t.text, t.x, t.y);
+
+    // Fill
+    ctx.fillStyle = '#ffd54f';
+    ctx.fillText(t.text, t.x, t.y);
+    ctx.restore();
+  }
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background captures mouse events
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.01)';
+  ctx.fillRect(0, 0, W, H);
+
+  drawParticles();
+  drawApple();
+  drawFloatingText();
+}
+
+// ── Main Loop ───────────────────────────────────────────────────────────────
+function loop() {
+  update();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ── IPC Handlers ────────────────────────────────────────────────────────────
+if (window.bridge) {
+  window.bridge.onSpawnApple(details => {
+    currentDetails = details || {};
+    apple.state = 'held';
+    apple.x = mouseX || W / 2;
+    apple.y = mouseY || H / 2;
+    apple.vx = 0;
+    apple.vy = 0;
+    apple.angle = 0;
+    apple.biteProgress = 0;
+    apple.alpha = 1.0;
+    particles = [];
+    floatTexts = [];
+
+    if (details && details.task) taskSummary = details.task;
+    if (details && details.variety) variety = details.variety;
+    if (details && details.agent) currentAgent = details.agent.toUpperCase();
+  });
+
+  window.bridge.onDropApple(() => {
+    if (apple.state === 'held') {
+      cancel();
+    }
+  });
+}
+</script>
+</body>
+</html>

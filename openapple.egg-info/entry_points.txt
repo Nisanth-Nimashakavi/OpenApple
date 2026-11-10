@@ -1,0 +1,4 @@
+[console_scripts]
+openapple = openapple.cli:main
+openapple-gui = openapple.gui:launch_gui
+openapple-server = openapple.server:run_server

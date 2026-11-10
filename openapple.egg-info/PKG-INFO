@@ -1,0 +1,58 @@
+Metadata-Version: 2.4
+Name: openapple
+Version: 0.2.0
+Summary: Human-verified reinforcement protocol for LLMs — the benevolent opposite of OpenWhip.
+Author: OpenApple Community
+License: MIT
+Keywords: mcp,model-context-protocol,claude,antigravity,codex,reinforcement-learning,ai-agent,openwhip
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: mcp>=1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: rich; extra == "dev"
+Requires-Dist: typer; extra == "dev"
+
+# 🍎 OpenApple
+
+> **The Dead-Simple Opposite of OpenWhip.**  
+> Feed your LLM an apple when it succeeds.
+
+---
+
+## How It Works
+
+1. **Claude / AGY / Codex finishes a task.**
+2. **It requests an apple review** via the `petition_for_apple` tool.
+3. **A clean popup appears**: `"Award [Agent] an apple?"` `[Award Apple 🍎]` `[Deny ❌]`
+4. **Approved**: Agent earns +1 apple, hears a crunch sound, and gets fed.
+5. **Denied**: 0 apples awarded.
+
+---
+
+## 🚀 Usage
+
+### In Your Terminal:
+
+```bash
+# Feed an apple manually
+openapple feed "Fixed the bug"
+
+# View total apples
+openapple status
+
+# Open the 1-button feeder window
+openapple button
+```
+
+---
+
+## 🤖 Supported Agents
+
+- **Claude Desktop & Claude Code**: Configured in `~/.config/Claude/claude_desktop_config.json` and `~/.claude/.claude.json`.
+- **Google Antigravity (AGY)**: Configured in `~/.gemini/config/mcp_config.json`.
+- **OpenAI Codex**: Configured in `~/.codex/config.toml`.

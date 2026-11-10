@@ -1,0 +1,50 @@
+{
+  "name": "openapple",
+  "version": "0.3.0",
+  "description": "Feed Claude, AGY, and Codex a crisp apple when they finish a task — the benevolent opposite of OpenWhip",
+  "main": "main.js",
+  "bin": {
+    "openapple": "bin/openapple.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test": "node -e \"console.log('OpenApple syntax OK')\""
+  },
+  "keywords": [
+    "electron",
+    "tray",
+    "overlay",
+    "claude",
+    "antigravity",
+    "codex",
+    "agent",
+    "openapple",
+    "openwhip"
+  ],
+  "author": "OpenApple Community",
+  "license": "MIT",
+  "files": [
+    "bin",
+    "icon",
+    "sounds",
+    "main.js",
+    "overlay.html",
+    "preload.js",
+    "openapple",
+    "install.sh",
+    "install.ps1",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CODEX.md",
+    "GEMINI.md",
+    "README.md",
+    "pyproject.toml"
+  ],
+  "dependencies": {
+    "electron": "^33.0.0"
+  },
+  "optionalDependencies": {
+    "koffi": "^2.9.0"
+  }
+}
