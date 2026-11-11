@@ -25,18 +25,18 @@ def get_agent_config_paths() -> Dict[str, List[Path]]:
 
     if sys_name == "Darwin":  # macOS
         paths["claude"].append(home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json")
-        paths["claude"].append(home / ".claude" / ".claude.json")
+        paths["claude"].append(home / ".claude.json")
         paths["agy"].append(home / ".gemini" / "config" / "mcp_config.json")
         paths["codex"].append(home / ".codex" / "config.toml")
     elif sys_name == "Windows":
         appdata = Path(os.environ.get("APPDATA", str(home / "AppData" / "Roaming")))
         paths["claude"].append(appdata / "Claude" / "claude_desktop_config.json")
-        paths["claude"].append(home / ".claude" / ".claude.json")
+        paths["claude"].append(home / ".claude.json")
         paths["agy"].append(home / ".gemini" / "config" / "mcp_config.json")
         paths["codex"].append(home / ".codex" / "config.toml")
     else:  # Linux / Unix
         paths["claude"].append(home / ".config" / "Claude" / "claude_desktop_config.json")
-        paths["claude"].append(home / ".claude" / ".claude.json")
+        paths["claude"].append(home / ".claude.json")
         paths["agy"].append(home / ".gemini" / "config" / "mcp_config.json")
         paths["codex"].append(home / ".codex" / "config.toml")
 
@@ -58,6 +58,7 @@ def install_mcp_for_json(config_path: Path) -> bool:
             data["mcpServers"] = {}
 
         data["mcpServers"]["openapple"] = {
+            "type": "stdio",
             "command": "openapple-server",
         }
 
