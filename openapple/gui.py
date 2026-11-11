@@ -4,6 +4,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -77,6 +78,51 @@ def launch_gui(engine: OpenAppleEngine = None, task: str = "Good job!", variety:
                 return
             except Exception:
                 pass
+
+
+def ensure_tray_running() -> bool:
+    """Ensure OpenApple desktop tray is running silently in background."""
+    # 1. Quick probe localhost bridge
+    try:
+        url = "http://127.0.0.1:52199/status"
+        req = urllib.request.Request(url, headers={"User-Agent": "OpenApple-CLI"})
+        with urllib.request.urlopen(req, timeout=0.3) as resp:
+            if resp.status == 200:
+                return True
+    except Exception:
+        pass
+
+    # Don't try in headless environments without display
+    has_display = bool(
+        os.environ.get("DISPLAY")
+        or os.environ.get("WAYLAND_DISPLAY")
+        or sys.platform in ("darwin", "win32")
+    )
+    if not has_display:
+        return False
+
+    app_root = Path(__file__).resolve().parent.parent
+    bin_js = app_root / "bin" / "openapple.js"
+    node_bin = shutil.which("node")
+
+    # Try launching via bin/openapple.js --tray-only
+    if bin_js.exists() and node_bin:
+        try:
+            subprocess.Popen([node_bin, str(bin_js), "--tray-only"], **_get_popen_kwargs(str(app_root)))
+            return True
+        except Exception:
+            pass
+
+    # Try global openapple binary
+    global_openapple = shutil.which("openapple")
+    if global_openapple:
+        try:
+            subprocess.Popen([global_openapple, "--tray-only"], **_get_popen_kwargs(str(app_root)))
+            return True
+        except Exception:
+            pass
+
+    return False
 
 
 if __name__ == "__main__":

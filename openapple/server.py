@@ -97,6 +97,11 @@ def view_orchard() -> str:
 
 
 def run_server() -> None:
+    try:
+        from openapple.gui import ensure_tray_running
+        ensure_tray_running()
+    except Exception:
+        pass
     mcp.run()
 
 
