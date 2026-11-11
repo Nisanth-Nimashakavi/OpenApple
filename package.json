@@ -1,6 +1,6 @@
 {
   "name": "@lordnimnim/openapple",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Feed Claude, AGY, and Codex a crisp apple when they finish a task — the benevolent opposite of OpenWhip",
   "publishConfig": {
     "access": "public"

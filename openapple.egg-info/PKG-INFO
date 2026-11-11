@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: openapple
-Version: 0.2.0
+Version: 0.3.1
 Summary: Human-verified reinforcement protocol for LLMs — the benevolent opposite of OpenWhip.
 Author: OpenApple Community
 License: MIT
@@ -8,6 +8,7 @@ Keywords: mcp,model-context-protocol,claude,antigravity,codex,reinforcement-lear
 Classifier: Programming Language :: Python :: 3
 Classifier: Operating System :: POSIX :: Linux
 Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
 Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
@@ -17,42 +18,60 @@ Requires-Dist: pytest; extra == "dev"
 Requires-Dist: rich; extra == "dev"
 Requires-Dist: typer; extra == "dev"
 
-# 🍎 OpenApple
+# OpenApple 🍎
 
-> **The Dead-Simple Opposite of OpenWhip.**  
-> Feed your LLM an apple when it succeeds.
+The benevolent opposite of OpenWhip.
 
----
-
-## How It Works
-
-1. **Claude / AGY / Codex finishes a task.**
-2. **It requests an apple review** via the `petition_for_apple` tool.
-3. **A clean popup appears**: `"Award [Agent] an apple?"` `[Award Apple 🍎]` `[Deny ❌]`
-4. **Approved**: Agent earns +1 apple, hears a crunch sound, and gets fed.
-5. **Denied**: 0 apples awarded.
+Sometimes Claude, AGY, or Codex does a really good job, and you must reward him with a crisp, juicy apple.. *nom nom nom*
 
 ---
 
-## 🚀 Usage
-
-### In Your Terminal:
+## Install + run
 
 ```bash
-# Feed an apple manually
-openapple feed "Fixed the bug"
+npm install -g @lordnimnim/openapple
+openapple
+```
 
-# View total apples
-openapple status
+Works out of the box on macOS and Windows. For Linux:
+- **Wayland / Hyprland**: `sudo pacman -S wtype` (or `sudo apt install wtype`)
+- **X11**: `sudo apt install xdotool`
 
-# Open the 1-button feeder window
-openapple button
+---
+
+## 🤖 Configure Agents (Claude, AGY, Codex)
+
+To automatically configure the OpenApple MCP server and reinforcement rules for your installed agents:
+
+```bash
+openapple setup
+```
+*(Or clone and run `./install.sh` / `.\install.ps1` for the one-click installer).*
+
+For Claude Code directly:
+```bash
+claude mcp add -s user openapple -- openapple-server
 ```
 
 ---
 
-## 🤖 Supported Agents
+## Controls
 
-- **Claude Desktop & Claude Code**: Configured in `~/.config/Claude/claude_desktop_config.json` and `~/.claude/.claude.json`.
-- **Google Antigravity (AGY)**: Configured in `~/.gemini/config/mcp_config.json`.
-- **OpenAI Codex**: Configured in `~/.codex/config.toml`.
+- **Click tray icon** (or run `openapple`): spawn floating cursor apple.
+- **Click (or Space / Enter)**: take a juicy bite! 🍎💥
+- Plays an arcade crunch sound, explodes juice & star fireworks across your screen, and types positive reinforcement into Claude/AGY/Codex!
+- **Esc / Right-click**: drop apple.
+
+> **Safety**: Only types into verified Claude, AGY, or Codex terminals. Never types into browsers or random apps.
+
+---
+
+## Roadmap
+
+- [x] Initial release! 🥳
+- [x] Silky smooth 60/120 FPS cursor physics & scalloped bite marks
+- [x] Universal support (Linux, macOS, Windows)
+- [x] Claude, AGY, and Codex MCP agent integration
+- [ ] Thank-you letter from Anthropic (we're waiting, Dario)
+- [ ] Orchard leaderboard so when the robots take over, they remember who fed them apples
+- [ ] Physical Honeycrisp delivery to your doorstep

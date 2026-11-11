@@ -7,6 +7,7 @@ openapple/config.py
 openapple/dialogs.py
 openapple/engine.py
 openapple/gui.py
+openapple/installer.py
 openapple/server.py
 openapple/varieties.py
 openapple.egg-info/PKG-INFO

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openapple"
-version = "0.3.1"
+version = "0.3.2"
 description = "Human-verified reinforcement protocol for LLMs — the benevolent opposite of OpenWhip."
 readme = "README.md"
 requires-python = ">=3.10"
