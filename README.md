@@ -17,10 +17,20 @@ Works out of the box on macOS and Windows. For Linux:
 - **Wayland / Hyprland**: `sudo pacman -S wtype` (or `sudo apt install wtype`)
 - **X11**: `sudo apt install xdotool`
 
-Or clone and run the one-click installer:
+---
+
+## 🤖 Configure Agents (Claude, AGY, Codex)
+
+To automatically configure the OpenApple MCP server and reinforcement rules for your installed agents:
+
 ```bash
-./install.sh        # Linux & macOS
-.\install.ps1       # Windows
+openapple setup
+```
+*(Or clone and run `./install.sh` / `.\install.ps1` for the one-click installer).*
+
+For Claude Code directly:
+```bash
+claude mcp add -s user openapple -- openapple-server
 ```
 
 ---

@@ -3,6 +3,29 @@ const path = require('path');
 const fs = require('fs');
 const { spawn, execSync } = require('child_process');
 
+// Forward CLI subcommands (setup, install, doctor, status, feed, serve) to Python CLI
+const cliSubcommands = ['install', 'setup', 'doctor', 'status', 'feed', 'serve'];
+const cmd = process.argv[2];
+
+if (cmd && cliSubcommands.includes(cmd)) {
+  const pythonArgs = cmd === 'setup' 
+    ? ['-m', 'openapple.cli', 'install', 'all'] 
+    : ['-m', 'openapple.cli', ...process.argv.slice(2)];
+  const pyCmd = process.platform === 'win32' ? 'python' : 'python3';
+  const py = spawn(pyCmd, pythonArgs, {
+    cwd: path.resolve(__dirname, '..'),
+    stdio: 'inherit',
+  });
+  py.on('error', (err) => {
+    console.error('Failed to run python CLI:', err.message);
+    process.exit(1);
+  });
+  py.on('exit', (code) => {
+    process.exit(code ?? 0);
+  });
+  return;
+}
+
 function findElectron() {
   const isWin = process.platform === 'win32';
   const isMac = process.platform === 'darwin';
