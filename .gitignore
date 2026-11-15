@@ -9,3 +9,9 @@ build/
 node_modules/
 *.tgz
 .serena/
+.mypy_cache/
+.ruff_cache/
+openapple-plugin.zip
+.claude/*.lock
+*.sqlite3*
+*.log

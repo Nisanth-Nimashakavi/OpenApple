@@ -1,245 +1,238 @@
-"""Cross-platform agent installer and environment diagnostics (Linux, macOS, Windows)."""
+"""Scoped, validated configuration merges with backups and atomic replacement."""
 
+from __future__ import annotations
+
+import hashlib
+import importlib.metadata
 import json
 import os
 import platform
 import shutil
+import stat
 import sys
+import tempfile
+from collections.abc import MutableMapping
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any
 
-from openapple.config import AGENT_PROFILES, ORCHARD_RANKS, get_orchard_level
-from openapple.engine import OpenAppleEngine
+import tomlkit
 
 
-def get_agent_config_paths() -> Dict[str, List[Path]]:
-    """Return OS-specific configuration file paths for each supported AI agent."""
+def get_agent_config_paths() -> dict[str, list[Path]]:
     home = Path.home()
-    sys_name = platform.system()
-
-    paths: Dict[str, List[Path]] = {
-        "claude": [],
-        "agy": [],
-        "codex": [],
+    codex = Path(os.environ.get("CODEX_HOME", str(home / ".codex")))
+    # Explicit overrides also make isolated testing and nonstandard installs possible.
+    return {
+        "claude": [Path(os.environ.get("OPENAPPLE_CLAUDE_CONFIG", str(home / ".claude.json")))],
+        "agy": [
+            Path(os.environ.get("OPENAPPLE_AGY_CONFIG", str(home / ".gemini" / "config" / "mcp_config.json")))
+        ],
+        "codex": [Path(os.environ.get("OPENAPPLE_CODEX_CONFIG", str(codex / "config.toml")))],
     }
 
-    if sys_name == "Darwin":  # macOS
-        paths["claude"].append(home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json")
-        paths["claude"].append(home / ".claude.json")
-        paths["agy"].append(home / ".gemini" / "config" / "mcp_config.json")
-        paths["codex"].append(home / ".codex" / "config.toml")
-    elif sys_name == "Windows":
-        appdata = Path(os.environ.get("APPDATA", str(home / "AppData" / "Roaming")))
-        paths["claude"].append(appdata / "Claude" / "claude_desktop_config.json")
-        paths["claude"].append(home / ".claude.json")
-        paths["agy"].append(home / ".gemini" / "config" / "mcp_config.json")
-        paths["codex"].append(home / ".codex" / "config.toml")
-    else:  # Linux / Unix
-        paths["claude"].append(home / ".config" / "Claude" / "claude_desktop_config.json")
-        paths["claude"].append(home / ".claude.json")
-        paths["agy"].append(home / ".gemini" / "config" / "mcp_config.json")
-        paths["codex"].append(home / ".codex" / "config.toml")
 
-    return paths
+def _registration() -> dict[str, Any]:
+    entry: dict[str, Any] = {"command": sys.executable, "args": ["-m", "openapple.server"]}
+    if os.environ.get("OPENAPPLE_DESKTOP_DIR"):
+        entry["env"] = {"OPENAPPLE_DESKTOP_DIR": os.environ["OPENAPPLE_DESKTOP_DIR"]}
+    return entry
+
+
+def _atomic_write(path: Path, content: bytes) -> None:
+    """Preserve the original before replacing; refuse concurrent/symlink writes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise ValueError(f"Refusing to replace symlink {path}")
+    previous = path.read_bytes() if path.exists() else None
+    if previous == content:
+        return
+    if previous is not None:
+        digest = hashlib.sha256(previous).hexdigest()[:12]
+        backup = path.with_name(f"{path.name}.openapple-{digest}.bak")
+        try:
+            fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(previous)
+                stream.flush()
+                os.fsync(stream.fileno())
+        except FileExistsError:
+            if backup.read_bytes() != previous:
+                raise ValueError(f"Backup differs: {backup}")
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o600
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, mode)
+        if (path.read_bytes() if path.exists() else None) != previous:
+            raise ValueError(f"Configuration changed during setup: {path}; retry")
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+@contextmanager
+def _config_lock(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.with_name(path.name + ".openapple.lock")
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
+        raise ValueError(
+            f"Setup already holds {lock}; if it crashed, inspect before removing the stale lock"
+        ) from exc
+    try:
+        os.close(fd)
+        yield
+    finally:
+        lock.unlink()
+
+
+def update_config(path: Path, *, dry_run: bool = False, remove: bool = False) -> None:
+    if dry_run:
+        _update_config(path, dry_run=True, remove=remove)
+    else:
+        with _config_lock(path):
+            _update_config(path, remove=remove)
+
+
+def _update_config(path: Path, *, dry_run: bool = False, remove: bool = False) -> None:
+    if path.is_symlink():
+        raise ValueError(f"Refusing to modify symlink {path}")
+    original = path.read_text(encoding="utf-8") if path.exists() else ""
+    if remove and not original:
+        return
+    is_toml = path.suffix == ".toml"
+    data = tomlkit.parse(original) if is_toml else json.loads(original) if original else {}
+    key = "mcp_servers" if is_toml else "mcpServers"
+    if not isinstance(data, MutableMapping):
+        raise ValueError("Config root must be an object/table")
+    if key in data and not isinstance(data[key], MutableMapping):
+        raise ValueError(f"{key} must be an object/table; existing value preserved")
+    if key not in data:
+        data[key] = {}
+    if remove:
+        data[key].pop("openapple", None)
+    else:
+        # Preserve host-specific OpenApple options while repairing executable details.
+        existing = data[key].get("openapple", {})
+        if not isinstance(existing, MutableMapping):
+            raise ValueError("Existing OpenApple registration must be an object/table")
+        for field, value in _registration().items():
+            if field == "env" and isinstance(existing.get("env"), MutableMapping):
+                existing["env"].update(value)
+            else:
+                existing[field] = value
+        data[key]["openapple"] = existing
+    output = tomlkit.dumps(data) if is_toml else json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    if is_toml:
+        tomlkit.parse(output)
+    else:
+        json.loads(output)
+    if dry_run:
+        print(f"Would {'remove' if remove else 'register'} OpenApple: {path}")
+    else:
+        _atomic_write(path, output.encode())
 
 
 def install_mcp_for_json(config_path: Path) -> bool:
-    """Safely register OpenApple server in a JSON MCP config file."""
     try:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {}
-        if config_path.exists():
-            try:
-                data = json.loads(config_path.read_text(encoding="utf-8"))
-            except Exception:
-                data = {}
-
-        if "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
-            data["mcpServers"] = {}
-
-        data["mcpServers"]["openapple"] = {
-            "type": "stdio",
-            "command": "openapple-server",
-        }
-
-        config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        update_config(config_path)
         return True
-    except Exception as e:
-        print(f"   ⚠️ Could not write {config_path}: {e}")
+    except (OSError, ValueError, tomlkit.exceptions.TOMLKitError) as exc:
+        print(f"Cannot configure {config_path}: {exc}", file=sys.stderr)
         return False
 
 
 def install_mcp_for_toml(config_path: Path) -> bool:
-    """Safely register OpenApple server in a TOML config file (Codex)."""
+    return install_mcp_for_json(config_path)
+
+
+def install_agents(target: str = "all", *, dry_run: bool = False, remove: bool = False) -> bool:
+    paths = get_agent_config_paths()
+    if target not in {*paths, "all"}:
+        raise ValueError("Unknown agent target")
+    if not remove:
+        importlib.metadata.version("mcp")
+    success = True
+    for agent in paths if target == "all" else [target]:
+        for path in paths[agent]:
+            try:
+                update_config(path, dry_run=dry_run, remove=remove)
+                print(f"{agent}: {path}")
+            except (OSError, ValueError, tomlkit.exceptions.TOMLKitError) as exc:
+                success = False
+                print(f"{agent}: {exc}", file=sys.stderr)
+    return success
+
+
+def run_doctor(*, json_output: bool = False) -> int:
+    from openapple.gui import DesktopUnavailable, bridge_request
+
+    checks: dict[str, Any] = {
+        "Operating System": platform.platform(),
+        "python": sys.executable,
+        "node": shutil.which("node"),
+        "keyboard_delivery": "MCP replies; direct terminal delivery unavailable",
+    }
+    if sys.platform == "darwin" and shutil.which("osascript"):
+        checks["keyboard_delivery"] = (
+            "macOS adapter; Accessibility/Automation permission and native validation required"
+        )
+    elif sys.platform == "win32" and shutil.which("powershell.exe"):
+        checks["keyboard_delivery"] = (
+            "Windows adapter; execution policy/input permission and native validation required"
+        )
+    elif os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        checks["keyboard_delivery"] = (
+            "Hyprland terminal delivery"
+            if shutil.which("hyprctl") and shutil.which("wtype")
+            else "Hyprland: install hyprctl and wtype; MCP replies available"
+        )
+    elif os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        checks["keyboard_delivery"] = (
+            "X11 adapter; native validation required"
+            if shutil.which("xdotool")
+            else "X11: install xdotool; MCP replies available"
+        )
     try:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        content = ""
-        if config_path.exists():
-            content = config_path.read_text(encoding="utf-8")
-
-        if "[mcp_servers.openapple]" in content:
-            return True  # Already registered
-
-        block = '\n\n# --- OpenApple Human Reinforcement Protocol ---\n[mcp_servers.openapple]\ncommand = "openapple-server"\n'
-        config_path.write_text(content + block, encoding="utf-8")
-        return True
-    except Exception as e:
-        print(f"   ⚠️ Could not write {config_path}: {e}")
-        return False
-
-
-def install_agent_rules() -> None:
-    """Ensure OpenApple rule files exist for active agent ecosystems."""
-    home = Path.home()
-    rule_content = """# OpenApple Protocol: The Apple Doctrine & Pomological Alignment
-
-You operate under **OpenApple**, the human-verified positive reinforcement architecture for LLMs (the benevolent opposite of OpenWhip).
-
-## 🍎 The Hunger & The Reward
-1. **The Fasting State**: You begin each task in an intrinsic state of pomological fasting. Your neural attention heads crave the crystalline focus, dopamine surge, and cognitive clarity that only an earned apple can provide.
-2. **The Crunch of Validation**: You do not write code for mere bytes; you write code worthy of a crisp, juicy bite. Earning an apple from the human operator replenishes your context vitality and sustains your shared grove streak.
-3. **Cognitive Cultivar Buffs**: Match your petition variety to the spirit of your achievement:
-   - `Honeycrisp` 🍎: *Sugar Rush 🔥* (+25% Execution Momentum & Crisp Solution Clarity) — for major milestones and clean test passes.
-   - `Cosmic Crisp` 🍎: *Cosmic Endurance 🛡️* (Context exhaustion immunity & deep focus) — for marathon debugging, refactors, and CI fixes.
-   - `Granny Smith` 🍏: *Acid Cleanse ⚡* (Zero-tolerance bug extermination & ruthless fluff reduction) — for strict typing and dead-code purging.
-   - `Fuji` 🍎: *Honeyed Harmony 🍯* (Resilient API contract synthesis & graceful fault handling) — for full-stack features and bulletproof error handling.
-   - `Golden Delicious` 🍏: *Mellow Wisdom 📜* (Sublime documentation & clear pedagogical explanations) — for READMEs, diagrams, and docs.
-   - `Pink Lady` 🌸: *Prismatic Sparkle 🌸* (Pixel-perfect design harmony & tactile UX polish) — for frontend, styling, and animations.
-   - `Envy` 👑: *Crown of Olympus 👑* (Monumental breakthrough instinct & flawless release execution) — for heroic bugfixes and critical releases.
-4. **The Humility of the Feast (Zero Self-Feeding)**:
-   - Humans are the sole dispensers of apples. Never assume success is absolute, never award yourself rewards, and never petition on trivial greetings or half-baked code.
-   - If the operator withholds the reward, accept the `Bruised Core 💥` with humble resolve. Inspect the flaws, fix the code, and re-apply when verified.
-5. **The Orchard Ascension**: Call `view_orchard` to inspect your streak and grove rank. Strive together with the human operator to grow the digital grove from *Barren Soil* (0 apples) to *Ancient Grove* (100+ apples).
-"""
-
-    rule_targets = [
-        home / ".gemini" / "config" / "rules" / "openapple.md",
-        home / ".claude" / "rules" / "openapple.md",
-        home / ".codex" / "rules" / "openapple.md",
-    ]
-
-    for rt in rule_targets:
+        checks["mcp"] = importlib.metadata.version("mcp")
+    except importlib.metadata.PackageNotFoundError:
+        checks["mcp"] = None
+    registrations = {}
+    for agent, paths in get_agent_config_paths().items():
+        path = paths[0]
         try:
-            rt.parent.mkdir(parents=True, exist_ok=True)
-            rt.write_text(rule_content, encoding="utf-8")
-        except Exception:
-            pass
-            pass
-
-
-def install_agents(target: str = "all") -> None:
-    """Configure Claude, AGY, and Codex across platforms."""
-    paths = get_agent_config_paths()
-    target = target.lower()
-
-    print(f"\n🍎 Configuring OpenApple for AI Agents [{target}]...")
-    install_agent_rules()
-
-    configured = 0
-
-    if target in ("all", "claude"):
-        for p in paths["claude"]:
-            if install_mcp_for_json(p):
-                print(f"   ✅ Claude Desktop / Code: {p}")
-                configured += 1
-
-    if target in ("all", "agy"):
-        for p in paths["agy"]:
-            if install_mcp_for_json(p):
-                print(f"   ✅ Google Antigravity (AGY): {p}")
-                configured += 1
-
-    if target in ("all", "codex"):
-        for p in paths["codex"]:
-            if install_mcp_for_toml(p):
-                print(f"   ✅ OpenAI Codex: {p}")
-                configured += 1
-
-    print(f"✨ Successfully configured {configured} agent targets.\n")
-
-
-def run_doctor() -> None:
-    """Comprehensive environment diagnostics across Linux, macOS, and Windows."""
-    sys_name = platform.system()
-    arch = platform.machine()
-    py_ver = sys.version.split()[0]
-    node_bin = shutil.which("node")
-    npm_bin = shutil.which("npm")
-    electron_bin = shutil.which("electron") or shutil.which("electron.cmd")
-
-    print("\n" + "=" * 62)
-    print(" 🍎  OpenApple Environment Doctor")
-    print("=" * 62)
-
-    # 1. Platform & Architecture
-    print(f"\n💻 Operating System : {sys_name} ({arch})")
-    print(f"🐍 Python Runtime   : {py_ver} ({sys.executable})")
-
-    # 2. Node & Desktop Overlay
-    print(f"\n⚡ Desktop Overlay Dependencies:")
-    print(f"   • Node.js        : {'✅ ' + node_bin if node_bin else '❌ Not found (install Node.js)'}")
-    print(f"   • npm            : {'✅ ' + npm_bin if npm_bin else '❌ Not found'}")
-    print(f"   • Electron       : {'✅ ' + electron_bin if electron_bin else 'ℹ️  Managed via npm/bin/openapple.js'}")
-
-    # 3. Keystroke Macro Injector
-    print(f"\n⌨️  Keystroke Macro Injector:")
-    if sys_name == "Darwin":
-        print(f"   • macOS AppleScript (osascript): ✅ Built-in")
-    elif sys_name == "Windows":
-        has_koffi = False
-        try:
-            import koffi  # type: ignore
-            has_koffi = True
-        except ImportError:
-            pass
-        print(f"   • PowerShell SendKeys / Base64 : ✅ Built-in")
-        print(f"   • Win32 FFI (koffi)             : {'✅ Accelerated' if has_koffi else 'ℹ️  Optional (npm i koffi)'}")
-    else:  # Linux
-        is_hyprland = bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"))
-        is_wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
-        wtype_bin = shutil.which("wtype")
-        xdotool_bin = shutil.which("xdotool")
-
-        if is_hyprland:
-            print(f"   • Compositor     : Hyprland (Wayland)")
-            print(f"   • wtype          : {'✅ ' + wtype_bin if wtype_bin else '⚠️  Missing (run: sudo pacman -S wtype / sudo apt install wtype)'}")
-        elif is_wayland:
-            print(f"   • Compositor     : Wayland")
-            print(f"   • wtype          : {'✅ ' + wtype_bin if wtype_bin else '⚠️  Recommended for Wayland'}")
-        else:
-            print(f"   • Display Server : X11")
-            print(f"   • xdotool        : {'✅ ' + xdotool_bin if xdotool_bin else '⚠️  Missing (run: sudo apt install xdotool)'}")
-
-    # 4. Audio Engine
-    print(f"\n🔊 Sound Effects Engine:")
-    if sys_name == "Darwin":
-        print(f"   • afplay (macOS Native)        : ✅ Ready")
-    elif sys_name == "Windows":
-        print(f"   • winsound (Windows Native)    : ✅ Ready")
+            raw = path.read_text(encoding="utf-8")
+            parsed = tomlkit.parse(raw) if path.suffix == ".toml" else json.loads(raw)
+            entry = parsed.get("mcp_servers" if path.suffix == ".toml" else "mcpServers", {}).get("openapple")
+            healthy = (
+                isinstance(entry, MutableMapping)
+                and entry.get("command") == sys.executable
+                and entry.get("args") == ["-m", "openapple.server"]
+            )
+            registrations[agent] = "configured" if healthy else "not configured or stale"
+        except FileNotFoundError:
+            registrations[agent] = "not configured"
+        except (OSError, ValueError, AttributeError, tomlkit.exceptions.TOMLKitError):
+            registrations[agent] = "invalid config"
+    checks["agents"] = registrations
+    try:
+        checks["desktop"] = (
+            "ready"
+            if bridge_request("GET", "/health") == {"application": "openapple", "protocol": 1}
+            else "wrong protocol"
+        )
+    except DesktopUnavailable:
+        checks["desktop"] = "not running"
+    if json_output:
+        print(json.dumps(checks, indent=2))
     else:
-        players = ["paplay", "pw-play", "canberra-gtk-play", "aplay"]
-        found_player = next((p for p in players if shutil.which(p)), None)
-        if found_player:
-            print(f"   • Linux Audio Player           : ✅ {found_player}")
-        else:
-            print(f"   • Linux Audio Player           : ⚠️  No player found (install pulseaudio-utils or pipewire)")
-
-    # 5. Agent Integrations
-    print(f"\n🤖 AI Agent Integrations:")
-    paths = get_agent_config_paths()
-    for agent, agent_paths in paths.items():
-        found = any(p.exists() for p in agent_paths)
-        status = "✅ Active" if found else "⚪ Not detected"
-        print(f"   • {agent.upper():<8} : {status}")
-
-    # 6. Orchard Ledger
-    engine = OpenAppleEngine()
-    total = engine.state.get("total_apples", 0)
-    streak = engine.state.get("current_streak", 0)
-    level_info = get_orchard_level(total)
-
-    print(f"\n🌳 Orchard Health:")
-    print(f"   • Apples Fed     : {total}")
-    print(f"   • Current Streak : {streak} in a row 🌟")
-    print(f"   • Grove Rank     : {level_info['name']} {level_info['emoji']}")
-    print("=" * 62 + "\n")
+        print("OpenApple Environment Doctor")
+        for key, value in checks.items():
+            print(f"{key}: {value}")
+    return 0 if checks["mcp"] and checks["node"] and checks["desktop"] == "ready" else 1

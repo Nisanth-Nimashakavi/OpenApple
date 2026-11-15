@@ -1,7 +1,7 @@
 {
   "name": "@lordnimnim/openapple",
-  "version": "0.3.2",
-  "description": "Feed Claude, AGY, and Codex a crisp apple when they finish a task — the benevolent opposite of OpenWhip",
+  "version": "0.4.0",
+  "description": "Feed Claude, AGY, and Codex a crisp apple when they finish a task \u2014 the benevolent opposite of OpenWhip",
   "publishConfig": {
     "access": "public"
   },
@@ -12,7 +12,10 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "test": "node -e \"console.log('OpenApple syntax OK')\""
+    "test": "node --test tests/desktop.test.cjs tests/delivery.test.cjs",
+    "check": "node scripts/check_syntax.cjs",
+    "test:desktop": "node scripts/check_desktop.cjs",
+    "format:check": "prettier --check main.js preload.js overlay.js overlay.css \"desktop/*.cjs\" \"desktop/native/*.js\" \"bin/*.js\" \"tests/*.cjs\" \"scripts/*.cjs\""
   },
   "keywords": [
     "electron",
@@ -42,12 +45,25 @@
     "CODEX.md",
     "GEMINI.md",
     "README.md",
-    "pyproject.toml"
+    "pyproject.toml",
+    "desktop",
+    "overlay.js",
+    "overlay.css",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs/ARCHITECTURE.md",
+    "docs/VALIDATION.md",
+    "docs/FIX_STATUS.md",
+    "docs/QUALITY_REVIEW.md",
+    "CONTRIBUTING.md"
   ],
   "dependencies": {
-    "electron": "^33.0.0"
+    "electron": "^45.3.2"
   },
-  "optionalDependencies": {
-    "koffi": "^2.9.0"
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
   }
 }

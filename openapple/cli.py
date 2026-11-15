@@ -1,88 +1,89 @@
-"""OpenApple CLI: Fast, Smooth & Fun reward tool for AI agents (Claude, AGY, Codex)."""
+"""Human-facing CLI. The desktop package owns the `openapple` command."""
 
 import argparse
+import json
+import shlex
+import sqlite3
+import subprocess
 import sys
-from openapple.audio import play_sound
-from openapple.engine import OpenAppleEngine
-from openapple.gui import launch_gui
-from openapple.installer import install_agents, run_doctor
+
+from openapple import __version__
+from openapple.engine import LedgerError, OpenAppleEngine
+from openapple.gui import DesktopUnavailable, launch_gui
 
 
-def main():
-    parser = argparse.ArgumentParser(prog="openapple", description="OpenApple: Smooth positive reinforcement for Claude, AGY, and Codex.")
-    subparsers = parser.add_subparsers(dest="command")
-
-    # feed
-    p_feed = subparsers.add_parser("feed", help="Feed an apple with crunch sound & overlay")
-    p_feed.add_argument("task", nargs="?", default="Good job on the task!", help="Task summary")
-    p_feed.add_argument("--agent", "-a", default="", help="Target agent: claude, agy, or codex (auto-detected if omitted)")
-    p_feed.add_argument("--variety", "-v", default="Honeycrisp", help="Apple variety (e.g. Honeycrisp, Cosmic Crisp, Fuji)")
-
-    # install
-    p_inst = subparsers.add_parser("install", help="Configure AI agents (Claude, AGY, Codex)")
-    p_inst.add_argument("target", nargs="?", default="all", choices=["all", "claude", "agy", "codex"], help="Target agent ecosystem")
-
-    # doctor
-    subparsers.add_parser("doctor", help="Check OS compatibility, audio, keyboard injection & agents")
-
-    # status, overlay, serve
-    subparsers.add_parser("status", help="Show total apples earned")
-    subparsers.add_parser("overlay", help="Spawn the smooth cursor apple overlay")
-    subparsers.add_parser("gui", help="Alias for overlay")
-    subparsers.add_parser("button", help="Alias for overlay")
-    subparsers.add_parser("serve", help="Run the MCP server")
-
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="openapple", description="Human-reviewed apple rewards for AI agents"
+    )
+    parser.add_argument("--version", action="version", version=__version__)
+    sub = parser.add_subparsers(dest="command")
+    feed = sub.add_parser("feed", help="Submit work and wait for human review")
+    feed.add_argument("task", nargs="?", default="Good job on the task!")
+    feed.add_argument("--agent", "-a", default="Agent")
+    feed.add_argument("--variety", "-v", default="Honeycrisp")
+    feed.add_argument("--timeout", type=int, default=300)
+    for command in ("setup", "install", "uninstall"):
+        setup = sub.add_parser(command, help=f"{command.title()} selected agent integrations")
+        setup.add_argument("target", nargs="?", default="all", choices=["all", "claude", "agy", "codex"])
+        setup.add_argument("--dry-run", action="store_true")
+    doctor = sub.add_parser("doctor", help="Inspect runtime and registration health")
+    doctor.add_argument("--json", action="store_true")
+    sub.add_parser("status", help="Show committed orchard history")
+    for command in ("overlay", "gui", "button"):
+        sub.add_parser(command, help="Open a manual review request")
+    sub.add_parser("serve", help="Run the stdio MCP adapter")
     args = parser.parse_args()
-    engine = OpenAppleEngine()
+    try:
+        if args.command in ("setup", "install", "uninstall"):
+            from openapple.installer import install_agents
 
-    if not args.command:
-        # Running bare 'openapple' launches the smooth overlay, just like OpenWhip!
-        print("🍎 Spawning OpenApple overlay... Click to feed!")
-        launch_gui(engine)
-        return
+            return (
+                0
+                if install_agents(args.target, dry_run=args.dry_run, remove=args.command == "uninstall")
+                else 1
+            )
+        if args.command == "doctor":
+            from openapple.installer import run_doctor
 
-    if args.command == "status":
-        total = engine.state.get("total_apples", 0)
-        streak = engine.state.get("current_streak", 0)
-        print(f"\n🍎 OpenApple Status")
-        print(f"   Total Fed  : {total} apple{'s' if total != 1 else ''}")
-        print(f"   Streak     : {streak} in a row 🌟")
-        recent = engine.state.get("history", [])[-5:]
-        if recent:
-            print("\n   Recent Rewards:")
-            for r in reversed(recent):
-                status = "✅" if r.get("approved") else "❌"
-                agent_tag = f"[{r.get('agent', 'agent').upper()}]"
-                task_txt = r.get("task", "")[:50]
-                print(f"     {status} {agent_tag} {task_txt}")
-        print()
+            return run_doctor(json_output=args.json)
+        if args.command == "serve":
+            from openapple.server import run_server
 
-    elif args.command == "feed":
-        task = args.task or "Good job on the task!"
-        agent = getattr(args, "agent", "") or "claude"
-        variety = getattr(args, "variety", "Honeycrisp")
-        engine.register(task, True, agent, "CLI feed")
-        play_sound("crunch")
-        launch_gui(engine, task=task, variety=variety, agent=agent)
-        total = engine.state.get("total_apples", 0)
-        print(f"\n🍎 CRUNCH! Nom nom nom! Apple fed to {agent.upper()} for: \"{task}\" (Total: {total})\n")
-
-    elif args.command == "install":
-        install_agents(getattr(args, "target", "all"))
-
-    elif args.command == "doctor":
-        run_doctor()
-
-    elif args.command in ("overlay", "gui", "button"):
-        launch_gui(engine)
-
-    elif args.command == "serve":
-        from openapple.server import run_server
-        run_server()
-
-    else:
-        parser.print_help()
+            run_server()
+        elif args.command == "status":
+            print(json.dumps(OpenAppleEngine().state, indent=2, ensure_ascii=False))
+        elif args.command == "feed":
+            result = launch_gui(
+                task=args.task, agent=args.agent, variety=args.variety, wait=True, timeout=args.timeout
+            )
+            print(f"Review {result['state']}: {result['task']} ({result['id']})")
+            return 0 if result["state"] == "approved" else 2
+        else:
+            result = launch_gui()
+            print(f"Review queued: {result['id']}")
+        return 0
+    except ModuleNotFoundError as exc:
+        requirements = {
+            "tomlkit": "tomlkit>=0.13,<1",
+            "mcp": "mcp>=1.30,<2",
+            "anyio": "anyio>=4.6,<5",
+        }
+        dependency = (exc.name or "").split(".")[0]
+        if dependency not in requirements:
+            raise
+        repair = [sys.executable, "-m", "pip", "install", requirements[dependency]]
+        command = subprocess.list2cmdline(repair) if sys.platform == "win32" else shlex.join(repair)
+        print(
+            f"OpenApple: runtime dependency unavailable ({exc.name}).\n"
+            f"Repair the Python environment used by this launcher:\n  {command}",
+            file=sys.stderr,
+        )
+        return 1
+    except (OSError, LedgerError, DesktopUnavailable, sqlite3.Error, ValueError) as exc:
+        print(f"OpenApple: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

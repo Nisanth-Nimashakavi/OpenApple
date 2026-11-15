@@ -1,0 +1,19 @@
+name: Bug report
+description: Report a reproducible failure.
+body:
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected behavior, and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version, OS/display server, and sanitized openapple doctor --json output
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (remove private task text, tokens, and credentials)

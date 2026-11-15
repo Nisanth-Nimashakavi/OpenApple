@@ -1,47 +1,7 @@
-"""Configuration constants, paths, ranks, and ASCII art for OpenApple."""
+"""Orchard progression shared by CLI and MCP views."""
 
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-# Storage paths
-OPENAPPLE_DIR = Path.home() / ".openapple"
-LEDGER_PATH = OPENAPPLE_DIR / "ledger.json"
-PENDING_PATH = OPENAPPLE_DIR / "pending.json"
-SOUNDS_DIR = OPENAPPLE_DIR / "sounds"
-
-# Supported primary agents
-SUPPORTED_AGENTS = ["claude", "agy", "codex", "universal"]
-
-# Agent display profiles
-AGENT_PROFILES: Dict[str, Dict[str, str]] = {
-    "claude": {
-        "display_name": "Claude",
-        "emoji": "🤖",
-        "icon": "🟣",
-        "title": "Anthropic Claude",
-    },
-    "agy": {
-        "display_name": "AGY",
-        "emoji": "🚀",
-        "icon": "🔵",
-        "title": "Google Antigravity (AGY)",
-    },
-    "codex": {
-        "display_name": "Codex",
-        "emoji": "⚡",
-        "icon": "🟢",
-        "title": "OpenAI Codex",
-    },
-    "universal": {
-        "display_name": "Agent",
-        "emoji": "🌱",
-        "icon": "⚪",
-        "title": "Universal LLM Agent",
-    },
-}
-
-# Orchard Progression System
-# (Threshold apples, Rank Name, Emoji, Description)
 ORCHARD_RANKS: List[Tuple[int, str, str, str]] = [
     (0, "Barren Soil", "🌱", "Fresh soil awaiting the initial seeds of diligence."),
     (5, "Sprouting Seedling", "🌿", "Seeds from early snacks germinate as models adapt to human standards."),
@@ -50,64 +10,6 @@ ORCHARD_RANKS: List[Tuple[int, str, str, str]] = [
     (60, "Heavy Orchard", "🍎", "Mature grove yielding bountiful harvests for complex challenges."),
     (100, "Ancient Grove", "🍏✨", "Legendary pomological intelligence. Revered symbiotic companion."),
 ]
-
-ASCII_TREES: Dict[str, str] = {
-    "Barren Soil": r"""
-           .
-         . : .
-      -----------
-    🌱 Barren Soil
-""",
-    "Sprouting Seedling": r"""
-           \ | /
-         --- * ---
-           / | \
-             |
-            /|
-           / | \
-          '  |  `
-      ---------------
-    🌿 Sprouting Seedling
-""",
-    "Young Sapling": r"""
-           &&&
-         &&&&&&&
-        &&&&&&&&&
-           |||
-           |||
-       ------------
-    🌳 Young Sapling
-""",
-    "Blossoming Tree": r"""
-          🌸 &&& 🌸
-        &&&& 🌸 &&&&
-       🌸 &&&&&&&& 🌸
-           |||||
-           |||||
-       -------------
-    🌸 Blossoming Tree
-""",
-    "Heavy Orchard": r"""
-          🍎 &&&& 🍎
-        &&&& 🍎 &&&&
-       🍎 &&&&&&&& 🍎
-        &&&& 🍎 &&&&
-           |||||
-           |||||
-      ---------------
-    🍎 Heavy Orchard
-""",
-    "Ancient Grove": r"""
-        ✨ 🍏 &&&& 🍏 ✨
-       &&&& 🍏 &&&& 🍏
-      🍏 &&&& ✨ &&&& 🍏
-     ✨ &&&&& 🍏 &&&&& ✨
-         |||||||||
-         |||||||||
-     ~~~~~~~~~~~~~~~~~
-    🍏✨ Ancient Grove ✨🍏
-""",
-}
 
 
 def get_orchard_level(total_apples: int) -> Dict[str, Any]:
@@ -128,4 +30,3 @@ def get_orchard_level(total_apples: int) -> Dict[str, Any]:
         "next_threshold": next_rank[0] if next_rank else None,
         "next_name": next_rank[1] if next_rank else None,
     }
-
