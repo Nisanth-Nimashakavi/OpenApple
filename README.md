@@ -1,3 +1,6 @@
+
+
+
 # OpenApple 🍎
 
 The benevolent opposite of OpenWhip.
@@ -45,6 +48,9 @@ claude mcp add -s user openapple -- openapple-server
 > **Safety**: Only types into verified Claude, AGY, or Codex terminals. Never types into browsers or random apps.
 
 ---
+## Example useage
+
+https://github.com/user-attachments/assets/00456121-17e3-476b-9f01-c222909c0b6b
 
 ## Roadmap
 
